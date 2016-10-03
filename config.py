@@ -1,2 +1,6 @@
 DATA_PATH ="comments/"
 RAW_PATH = "raw_data/"
+BACKGROUND_COLOR = "#f5dfd9"
+SINGLE_COLOR = "#b1506c"
+SECOND_COLOR = "#27757b"
+COLOR_MAP = "Reds"
