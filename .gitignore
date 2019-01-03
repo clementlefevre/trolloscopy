@@ -1,2 +1,6 @@
 /comments/all_content.csv
 /comments/raw_data/*
+*.csv
+*.db
+config.py
+.Rproj.user
