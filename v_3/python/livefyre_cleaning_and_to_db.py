@@ -8,7 +8,7 @@ import pandas as pd
 import re
 from pandas.io.json import json_normalize
 from sqlalchemy import create_engine
-import sqlite3
+
 
 ENGINE = 'sqlite:///db/livefyre.db'
 
@@ -168,20 +168,7 @@ def store_likes_to_db(df_comments_filepath):
 #%%
 # drop a table
 
-# import the sqlite3 module
-
-def drop_table(table_name):
-     
-    connection  = sqlite3.connect(ENGINE.replace('sqlite:///',''))
-    cursor      = connection.cursor()
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-    print(cursor.fetchall())
-    
-    dropTableStatement = "DROP TABLE \"{0}\"".format(table_name)
-    print(dropTableStatement)
-    cursor.execute(dropTableStatement)
-    cursor.execute("vacuum")
-    connection.close()    
+ 
     
 #%%
 # test authors :
