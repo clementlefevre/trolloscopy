@@ -1,0 +1,164 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+library(RSQLite)
+library(tidyverse)
+library(plotly)
+library(lubridate)
+library(tm)
+library(SnowballC)
+library(wordcloud)
+Sys.setlocale("LC_ALL","English")
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+```{r}
+DB.NAME <- '../data/db/livefyre.db'
+
+
+
+connect_to_db <- function(){
+  tryCatch(
+    {
+      con <- dbConnect(RSQLite::SQLite(), DB.NAME)
+      return(con)
+    },
+    error=function(cond) {
+      message(paste("could open DB connection", DB.NAME))
+      return(NULL)
+    }
+  )
+}
+
+read_df_from_db <- function(table.name){
+  con <- connect_to_db()
+  
+  tryCatch(
+    {
+      df <- (dbReadTable(con,table.name))
+      dbDisconnect(con)
+      #df$timestamp <- as.POSIXct(df$timestamp,  origin="1970-01-01", tz = 'CET')
+      #df$date <- as.Date(df$timestamp)
+     
+      return (df)
+    },
+    error=function(cond) {
+      message(paste("Database Table : ", table.name , " does not seem to exist:"))
+     
+      return(NULL)
+    }
+  ) 
+   dbDisconnect(con)
+  
+ 
+}
+
+```
+
+#read data
+```{r}
+df.authors <- read_df_from_db('authors')
+df.titles <- read_df_from_db('titles')
+df.comments <- read_df_from_db('comments')
+df.comments$createdAt <-
+  as.POSIXct(df.comments$createdAt,  origin = "1970-01-01", tz = 'CET')
+
+df.text <- read_df_from_db('text')
+
+df.top.authors <- df.comments %>% filter(year(createdAt)==2018) %>% group_by(authorId) %>% summarise(total_comments = n()) #%>% top_n(200)
+
+df.top.authors <- merge(df.top.authors,df.authors,by.x='authorId',by.y='author_id',all.x = TRUE) %>% dplyr::arrange(desc(total_comments))
+```
+
+
+
+# create author text table
+
+```{r}
+df.text.authors <- merge(df.comments,df.text,by='id') %>% select(authorId,createdAt,bodyHtml)
+```
+
+#
+```{r}
+df.top.text <- merge(df.text.authors,df.top.authors,by='authorId') %>% filter(authorId=='4191063@ft.fyre.co')
+df.top.text$lengo <- str_length(df.top.text$bodyHtml)
+
+df.top.text.groupy <- df.top.text %>% group_by(authorId) %>% summarise(all.text = paste0(bodyHtml, collapse = ""), total_lengo = sum(lengo)) 
+```
+
+
+```{r}
+
+review_corpus = Corpus(VectorSource(df.top.text$bodyHtml))
+
+review_corpus = tm_map(review_corpus, content_transformer(tolower))
+review_corpus = tm_map(review_corpus, removeNumbers)
+review_corpus = tm_map(review_corpus, removePunctuation)
+review_corpus = tm_map(review_corpus, removeWords, c("the", "and", stopwords("english")))
+review_corpus =  tm_map(review_corpus, stripWhitespace)
+```
+```{r}
+inspect(review_corpus[1])
+```
+
+```{r}
+doc_term <- DocumentTermMatrix(review_corpus)
+
+doc_term
+```
+
+```{r}
+inspect(doc_term[10:15, 10:15])
+```
+
+```{r}
+review_dtm = removeSparseTerms(doc_term, 0.99)
+review_dtm
+```
+
+```{r}
+inspect(review_dtm[1,1:20])
+```
+
+```{r}
+findFreqTerms(review_dtm, 200)
+```
+
+```{r}
+freq = data.frame(sort(colSums(as.matrix(review_dtm)), decreasing=TRUE))
+wordcloud(rownames(freq), freq[,1], max.words=50, colors=brewer.pal(1, "Dark2"))
+```
+
+```{r}
+review_dtm_tfidf <- DocumentTermMatrix(review_corpus, control = list(weighting = weightTfIdf))
+review_dtm_tfidf = removeSparseTerms(review_dtm_tfidf, 0.95)
+review_dtm_tfidf
+```
+
+```{r}
+inspect(review_dtm_tfidf[1,1:20])
+```
+
+```{r}
+freq = data.frame(sort(colSums(as.matrix(review_dtm_tfidf)), decreasing=TRUE))
+
+
+wordcloud(rownames(freq), freq[,1], max.words=30, colors=brewer.pal(1, "Dark2"))
+```
+```{r}
+library(tidytext)
+library(janeaustenr)
+book_words <- austen_books()
+```
+

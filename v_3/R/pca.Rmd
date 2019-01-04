@@ -1,0 +1,39 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(plotly)
+source('shiny/df_service.R')
+```
+
+# load data
+```{r}
+df.pca <- read_df_from_db('pca')
+df.authors <- read_df_from_db('authors')
+df <- merge(df.pca,df.authors,by='author_id')
+```
+
+```{r}
+df <- df %>% filter(year==2018)
+p <-plot_ly()  %>%
+        add_markers(
+          x = df$PCA_1,
+          y = df$PCA_2,
+          name = df$displayName,
+          marker = list(color = 'red', symbol = 'square'),
+          text =  paste(df$displayName), hoverinfo = 'text')
+          
+        
+
+p
+
+```
+

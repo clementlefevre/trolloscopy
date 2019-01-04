@@ -1,0 +1,193 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+```{r}
+library(RSQLite)
+library(tidyverse)
+library(plotly)
+library(lubridate)
+
+Sys.setlocale("LC_ALL","English")
+```
+
+
+# db services
+```{r}
+
+
+DB.NAME <- '../data/db/livefyre.db'
+
+
+
+connect_to_db <- function(){
+  tryCatch(
+    {
+      con <- dbConnect(RSQLite::SQLite(), DB.NAME)
+      return(con)
+    },
+    error=function(cond) {
+      message(paste("could open DB connection", DB.NAME))
+      return(NULL)
+    }
+  )
+}
+
+read_df_from_db <- function(table.name){
+  con <- connect_to_db()
+  
+  tryCatch(
+    {
+      df <- (dbReadTable(con,table.name))
+      dbDisconnect(con)
+      #df$timestamp <- as.POSIXct(df$timestamp,  origin="1970-01-01", tz = 'CET')
+      #df$date <- as.Date(df$timestamp)
+     
+      return (df)
+    },
+    error=function(cond) {
+      message(paste("Database Table : ", table.name , " does not seem to exist:"))
+     
+      return(NULL)
+    }
+  ) 
+   dbDisconnect(con)
+  
+ 
+}
+
+
+```
+
+# load data
+```{r}
+df.authors <- read_df_from_db('authors')
+df.titles <- read_df_from_db('titles')
+df.comments <- read_df_from_db('comments')
+df.comments$createdAt <-
+  as.POSIXct(df.comments$createdAt,  origin = "1970-01-01", tz = 'CET')
+df.comments$hms <-
+  strftime(df.comments$createdAt, format = "%H:%M:%S")
+df.comments$weekday <- as.POSIXlt(df.comments$createdAt)$wday
+df.comments$day <- wday(df.comments$createdAt, label = TRUE)
+df.comments$monthday <-  as.POSIXlt(df.comments$createdAt)$mday
+df.comments$year <- year(df.comments$createdAt)
+df.comments$month <- month(df.comments$createdAt)
+
+#df.text <- read_df_from_db('text')
+df.likes <- read_df_from_db('likes')
+```
+
+# compute top 20 authors
+```{r}
+df.top.authors <- df.comments %>% group_by(authorId) %>% summarise(total_comments = n()) %>% top_n(20)
+df.top.authors <- merge(df.top.authors,df.authors,by.x='authorId',by.y='author_id',all.x = TRUE) %>% dplyr::arrange(desc(total_comments))
+
+```
+
+# compute comment timeline
+
+```{r}
+
+filter_comment <- function(authorId.filter,
+                           year.filter,
+                           month.filter) {
+  df <- df.comments %>% dplyr::filter(authorId == authorId.filter)
+  
+  df <- df %>% filter((month == month.filter) & (year == year.filter))
+  df <- merge(df, df.titles, by = 'ft_id', all.x = TRUE)
+  year(df$createdAt) <- 2019
+  month(df$createdAt) <- 1
+  day(df$createdAt) <- 1
+  
+  
+  return (df)
+  
+}
+
+
+
+```
+
+```{r}
+
+  df <-
+      filter_comment('56645@ft.fyre.co',
+                     2018,
+                     1)
+  
+```
+
+```{r}
+  
+    p <-
+      plot_ly(
+        data = df,
+        x = ~ createdAt,
+        y = ~ monthday,
+        color =  ~ df$title,
+        type = 'scatter',
+        text =  ~ paste(df$day, '<br>', df$title),
+        mode='markers',
+        showlegend = FALSE
+      ) %>%
+      layout(xaxis = list(
+        range =
+          c(
+            as.POSIXct("2019-01-01 00:00:00"),
+            as.POSIXct("2019-01-01 23:59:59")
+          ),
+        type = "date"
+      ))
+    p
+```
+```{r}
+df <- df.comments %>% dplyr::filter(authorId %in% c('289060@ft.fyre.co','56645@ft.fyre.co', '4137934@ft.fyre.co'))
+df$date <- as.Date(df$createdAt)
+df.groupy <- df %>% group_by(date, authorId) %>% summarise(comments_count = n())
+df.groupy <- df.groupy %>% transform(id = as.integer(factor(authorId))) 
+
+
+```
+
+```{r}
+
+nrows <- length(unique(df.groupy$id))
+ p <-
+      plot_ly(
+        data = df.groupy,
+        x = ~ date,
+        y = ~ comments_count,
+        color= ~authorId,
+        type='bar',
+       yaxis = ~paste0("y", id),
+        showlegend = FALSE
+      )  %>%
+  subplot(nrows = nrows, shareX = TRUE)
+    p
+```
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+```{r}
+df.likes <- merge(df.likes,df.comments %>% select(authorId,id), by.x='comment_id', by.y='id')
+
+df.likes.short <- head(df.likes,100000)
+```
+```{r}
+df.groupy <- df.likes.short %>% group_by(authorId,likedBy) %>% summarise(likes_count = n())
+df.groupy <- merge(df.groupy,df.authors,by.x='authorId',by.y='author_id')
+df.groupy <- merge(df.groupy,df.authors,by.x='likedBy',by.y='author_id', suffixes=c('author','liker'))
+df.groupy %>% arrange(desc(likes_count))
+```
+
+## comments interactions
+```{r}
+data %>% 
+     group_by(foo) %>% 
+     mutate(bars_by_foo = paste0(bar, collapse = "")) 
+```
+

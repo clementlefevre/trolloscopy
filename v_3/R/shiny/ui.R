@@ -42,27 +42,31 @@ body <- dashboardBody(tabItems(
       )
     )),
     
-    fluidRow(column(
-      width = 10,
+    fluidRow(
       box(
         width = NULL,
         solidHeader = TRUE,
         
         plotlyOutput("timeline.overall")
       )
-    ),
-    column(width = 2))
+    )
   ),
   
   tabItem(
     tabName = "widgets",
     uiOutput("author.tab2.select"),
-    fluidRow(column(width = 6, box(
+    uiOutput("year.select.pca"),
+    fluidRow(box(width = NULL,
+                 solidHeader = TRUE,plotlyOutput("pca"))),
+    
+    fluidRow(column(width = 4, box(
       tableOutput('likes.table')
-    )), column(width = 6,
+    )), column(width = 4,
                box(
                  tableOutput('interactions.table')
-               )))
+               )),
+    column(width=4,box(tableOutput("tfidf.table")))
+    )
     
   )
 ))

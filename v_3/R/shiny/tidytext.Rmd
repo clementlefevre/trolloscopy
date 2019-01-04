@@ -1,0 +1,98 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+library(dplyr)
+library(tidytext)
+library(janeaustenr)
+library(gutenbergr)
+library(ggplot2)
+library(lubridate)
+library(SnowballC)
+library(stringr)
+source('db_service.R')
+
+```
+
+
+```{r}
+df.authors <- read_df_from_db('authors')
+df.titles <- read_df_from_db('titles')
+df.comments <- read_df_from_db('comments')
+df.comments$createdAt <-
+  as.POSIXct(df.comments$createdAt,  origin = "1970-01-01", tz = 'CET')
+
+#df.comments <- df.comments %>% filter(year(createdAt)==2018)
+
+df.text <- read_df_from_db('text')
+
+df.top.authors <- df.comments %>% filter(year(createdAt)==2018) %>% group_by(authorId) %>% summarise(total_comments = n()) %>% top_n(200)
+
+```
+
+```{r}
+all.text <- df.comments %>% select(authorId,id)
+all.text <- merge(all.text,df.text,by='id')
+
+
+#all.text <- merge(all.text,df.top.authors,by='authorId')
+```
+
+unest words
+```{r}
+
+
+all.text$bodyHtml <- str_squish(all.text$bodyHtml)
+all.text$bodyHtml <- gsub("\\d", "", all.text$bodyHtml)
+all.text$bodyHtml <- gsub("@\\w+ *", "", all.text$bodyHtml)
+
+      
+```
+
+```{r}
+
+book_words <- all.text %>%
+unnest_tokens(word, bodyHtml) %>%
+
+mutate_at("word", funs(wordStem((.), language = "en"))) %>%
+anti_join(stop_words)
+
+
+book_words <- book_words %>% count(authorId, word, sort = TRUE)
+
+total_words <-
+book_words %>% group_by(authorId) %>% summarize(total = sum(n))
+book_words <- left_join(book_words, total_words)
+book_words 
+```
+
+
+```{r}
+book_words <- book_words %>%
+  bind_tf_idf(word, authorId, n)
+book_words
+```
+```{r}
+df.tfidf <- book_words %>%
+  select(-total) %>%
+  arrange(desc(tf_idf))
+```
+
+# top 30
+```{r}
+df.tfidf.light <-df.tfidf %>% group_by(authorId) %>% top_n(30,wt=tf_idf)
+df.tfidf.light <- df.tfidf.light %>% select(-tf,-idf)
+```
+
+
+```{r}
+#insert_df_to_db(df.tfidf.light,'tfidf')
+
+```
+

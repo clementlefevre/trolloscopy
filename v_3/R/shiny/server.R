@@ -7,44 +7,11 @@ library(RSQLite)
 
 library(plotly)
 library(lubridate)
+source('db_service.R')
 
 Sys.setlocale("LC_ALL", "English")
 
-DB.NAME <- '../../data/db/livefyre.db'
 
-
-
-
-connect_to_db <- function() {
-  tryCatch({
-    con <- dbConnect(RSQLite::SQLite(), DB.NAME)
-    return(con)
-  },
-  error = function(cond) {
-    message(paste("could open DB connection", DB.NAME))
-    return(NULL)
-  })
-}
-
-read_df_from_db <- function(table.name) {
-  con <- connect_to_db()
-  
-  tryCatch({
-    df <- (dbReadTable(con, table.name))
-    dbDisconnect(con)
-    
-    
-    return (df)
-  },
-  error = function(cond) {
-    message(paste("Database Table : ", table.name , " does not seem to exist:"))
-    
-    return(NULL)
-  })
-  dbDisconnect(con)
-  
-  
-}
 
 
 df.authors <- read_df_from_db('authors')
@@ -61,6 +28,10 @@ df.comments$year <- year(df.comments$createdAt)
 df.comments$month <- month(df.comments$createdAt)
 
 df.text <- read_df_from_db('text')
+
+df.pca <- read_df_from_db('pca')
+df.authors <- read_df_from_db('authors')
+df.pca <- merge(df.pca,df.authors,by='author_id')
 
 # df.likes <- read_df_from_db('likes')
 # df.likes <- merge(df.likes,df.comments %>% select(authorId,id), by.x='comment_id', by.y='id')
@@ -185,6 +156,11 @@ function(input, output, session) {
       multiple = FALSE
     )
   })
+  output$year.select.pca <- renderUI({
+    selectInput(inputId = "year.select.pca",
+                label = "Year",
+                choices = sort(unique(df.comments$year)))
+  })
   
   output$year.select <- renderUI({
     selectInput(inputId = "year.select",
@@ -200,13 +176,20 @@ function(input, output, session) {
   
   
   output$likes.table <- renderTable({
-    df <-   likes.ranking(input$author.tab2.select)
-    df
+   # df <-   likes.ranking(input$author.tab2.select)
+    #df
   })
   
   output$interactions.table <-renderTable({
     
-    df <- create_interactions_table(input$author.tab2.select)
+    #df <- create_interactions_table(input$author.tab2.select)
+    #df
+  })
+  
+  output$tfidf.table <- renderTable({
+    query_string = paste0("SELECT * FROM tfidf WHERE authorId==\"",input$author.tab2.select,"\"")
+    
+    df <- query_df_from_db(query_string)
     df
   })
   
@@ -363,6 +346,22 @@ function(input, output, session) {
       subplot(plot_list,
               nrows = length(plot_list) ,
               shareX = TRUE)
+    p
+  })
+  
+  output$pca <- renderPlotly({
+   
+    df <- df.pca %>% filter(year==input$year.select.pca)
+    p <-plot_ly()  %>%
+      add_markers(
+        x = df$PCA_1,
+        y = df$PCA_2,
+        name = df$displayName,
+        marker = list(color = 'red', symbol = 'square'),
+        text =  paste(df$displayName), hoverinfo = 'text')
+    
+    
+    
     p
   })
   
